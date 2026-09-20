@@ -82,4 +82,4 @@ Neovim floating window that streams `opencode.log` human-friendly, filtered by p
 `--dir DIR` `opencode-log-tail.sh:24` (auto git root/pwd), `--lines N`, `--exclude TYPES` (`PERM:eval`, `bash`, `read` `opencode-log-tail.sh:60`), `--raw` / `--raw=MSG` `opencode-log-tail.sh:60`.
 
 ## Disclaimer
-This is a personal project, heavily written by AI, and checked by me.
+This is a personal project, heavily written by AI.
