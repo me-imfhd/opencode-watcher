@@ -1,5 +1,7 @@
 # opencode-watcher.nvim
 
+<video src="assets/demo.mp4" controls autoplay loop muted playsinline width="100%"></video>
+
 Neovim floating window that streams `opencode.log` human-friendly, filtered by project *basename* (shared directory). Keeps visible while `LOOP` active, auto-refreshes visible buffers when opencode formats a file.
 
 `opencode-log-tail.sh` already shows `[basename]` at front `opencode-log-tail.sh:303` and filters by `TARGET_DIR` git-root/pwd `opencode-log-tail.sh:124`.
