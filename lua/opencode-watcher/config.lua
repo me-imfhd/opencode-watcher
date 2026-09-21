@@ -19,6 +19,26 @@ M.defaults = {
 	hide_delay = 2500,
 	-- max lines kept in floating window
 	max_lines = 100,
+	-- prompt buffer (vsplit only)
+	prompt = {
+		enabled = true,
+		-- keymap for toggle/yank: Ctrl+. (also set for visual mode)
+		key = "<C-.>",
+		-- win: "vsplit" (floating fallback kept for backwards compat but default is vsplit)
+		win = "vsplit",
+		float = {
+			width = 80,
+			height = 20,
+			border = "rounded",
+			title = " opencode prompt (save :w to send) ",
+		},
+		vsplit = {
+			width = 60,
+		},
+		-- behavior on :w -- close vsplit after submit
+		close_on_submit = true,
+		clear_on_submit = false,
+	},
 	-- icons for human friendly view
 	icons = {
 		BOOT = "󰚩",
