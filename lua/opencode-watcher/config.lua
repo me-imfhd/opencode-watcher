@@ -1,6 +1,8 @@
 local M = {}
 
 M.defaults = {
+	-- master debug flag: when false, plugin does not write debug logs and stays silent (only errors via vim.notify)
+	debug = false,
 	-- shared directory: basename like "opencode-watcher.nvim" or full path; nil = auto (git root else cwd)
 	dir = nil,
 	-- position: "top-right" | "bottom-right"
@@ -11,7 +13,7 @@ M.defaults = {
 	-- tail script path (relative to plugin root or absolute)
 	tail_script = nil, -- auto-detected
 	-- extra args for tail script
-	exclude = "PERM:bash,read,edit", -- sensible default to reduce noise, set to nil to show all
+	exclude = nil, -- nil = show all events in floating window (no default filter)
 	lines = 0, -- 0 = only live, 50 = show history
 	-- auto refresh visible buffers when opencode formats a file
 	auto_refresh = true,
@@ -37,7 +39,22 @@ M.defaults = {
 		},
 		-- behavior on :w -- close vsplit after submit
 		close_on_submit = true,
-		clear_on_submit = false,
+		clear_on_submit = true,
+		-- instructions prepended to every prompt (customize per project)
+		instructions = "Keep loop/tool calls as few as possible. Just focus on fixing the task at hand and nothing else. No need to explain when the task is done. You are expected to give results fast, short and accurate, not long, unless specified in the prompt.",
+		-- delivery via opencode serve (server mode only)
+		server = {
+			hostname = "127.0.0.1",
+			port = 4096,
+			auto_approve = true, -- --auto : allow all tools that are not explicitly denied
+			model = nil, -- e.g. "anthropic/claude-sonnet-4"
+			agent = nil, -- e.g. "build"
+			timeout_ms = 30000,
+		},
+	},
+	logger = {
+		level = "INFO", -- DEBUG|INFO|WARN|ERROR (only when debug=true)
+		path = nil, -- nil = stdpath("log")/opencode-watcher-debug.log (plugin debug log)
 	},
 	-- icons for human friendly view
 	icons = {

@@ -1,0 +1,89 @@
+goal of this project:
+
+1. Utilize useful opencode events in neovim
+    a. to view agent touching files, editing files, executing tools
+    b. to view agent looping while you are working, see how many loops agent took to complete the task
+    c. to view agents progress around different set's of tasks given to it
+    d. to view if agent is stuck for any permission (although its better to run in auto)
+    e. to view if agent failed
+    f. refresh neovim buffers whenever agent edits files
+
+2. To make inline edits
+    a. select any peice of text and add prompt to it and send to opencode
+    b. save session id so new prompts go to the same opencode session
+    c. use the session id to get detailed view of how opencode operated on given prompt
+
+3. View prettified humanized log of opencode.json but per project using :OpencodeWatcherLogs
+4. Refresh OpencodeWatcherLogs and start a new session for inline edits using :OpencodeRefresh
+5. Change model for inline edits using :OpencodeModel
+6. See full debug logs of the plugin using :OpencodeDebugLogs
+
+How is opencode events utilized in neovim:
+
+Here we rely on opencode.json for our opencode events and classify them by directory we are working on
+if there are multiple sessions running, we would see events from multiple sessions sharing the same directory
+which is fine and as there is no intention to support events filtered by session right now
+
+1. Use opencode.json log file to get raw opencode events
+2. Classify the logs by directory and events into TAGS: 
+    BOOT,WATCH,CFG,FILE,SYNC,LLM,PERM,LOOP,MSG,SESS,CMD,EVT,CLEAN,MISC,LOG,ERR,RAW
+    a. PERM is structured as follows:
+        a. eval: perm=<perm_type> pat=<pattern>
+            perm_type: read/write/edit/glob/grep
+        b. asking: perm=<perm_type> patterns=<pattern>
+            perm_type: ask/asking
+        c. replied: perm=<perm_type> patterns=<pattern>
+            perm_type: reply/replied
+    b. FILE is structured as follows:
+        a. touching: file=<file_path>
+        b. formating: file=<file_path>
+    c. LOOP is structured as follows:
+        a. loop: started
+        b. loop: step=<step>
+        c. loop: exit/completed
+3. Neovim buffers are refreshed whene:
+    a. a file is formatted
+    b. reverting/unreverting/restore MSG is received
+4. All these events are presented in a single floating window
+5. Tags can be excluded to view only the events of interest
+6. Until the loop is completed floating window is pinned
+7. If an error occurs, the floating window is pinned
+8. Otherwise floating window is hidden after 5s
+9. Filter the logs by directory and exclude tags to get a cleaner view of what opencode is doing
+
+Usage:
+Use :OpencodeWatcherLogs to view live detailed prettified logs of opencode.json in a terminal this is persistent
+Otherwise see the default floating window for a simple cleaner view of what opencode is doing this is ephemeral
+
+<Advanced>
+Some notes on opencode db:
+(this can help agent build tools or debug sessions or messages for you)
+
+tables: session, message, part
+
+a directory can have multiple sessions
+a session can have multiple messages
+a message can have multiple parts
+
+part has json which has: type, tool, text, state.input.filepath, state.metadata.diff, additions, deletions, reason, etc
+    type: step-start, step-finish, tool, reasoning, text, stop
+</Advanced>
+
+How to utilize opencode to make inline edits in neovim
+
+1. select any piece of text (uses getregion() to get visual selection)
+    a. prompt can be opened without visual selection
+    b. when in file, filename and line number is added to prompt
+2. open a vertical split / floating buffer and yank pieces to visual selection into the buffer
+3. type instructions to send the model
+4. save the buffer to send the message to opencode
+
+How is message sent to opencode:
+
+Plugin ensures opencode is serving requests of port 4096 (checks and starts opencode server if not running)
+Plugin ensures there is a session created for inline edits 
+Plugin sends the message to opencode programmatically using opencode --attach <server> run <message>
+
+When opencode starts executing, it streams events into opencode.json
+which is monitored by the plugin using opencode watcher
+and it is used to visualize what opencode is doing and also refreshes the buffers whenever a file is formatted

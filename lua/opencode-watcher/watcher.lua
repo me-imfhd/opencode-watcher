@@ -9,51 +9,16 @@ local loop_exit_pending = false
 local idle_hide_timer = nil
 
 local function resolve_dir()
-	local opts = config.options
-	if opts.dir and opts.dir ~= "" then
-		-- if basename only (no /), try to find git root with that basename or use cwd
-		if not opts.dir:match("/") then
-			local basename = opts.dir
-			-- try git root
-			local handle = io.popen("git rev-parse --show-toplevel 2>/dev/null")
-			local git_root = handle and handle:read("*l")
-			if handle then
-				handle:close()
-			end
-			if git_root and git_root ~= "" then
-				local git_base = git_root:match("([^/]+)$")
-				if git_base == basename then
-					return git_root
-				end
-			end
-			-- try find under HOME/dev
-			local found = vim.fn.systemlist(
-				"find "
-					.. vim.fn.expand("$HOME/dev")
-					.. " -maxdepth 4 -type d -name "
-					.. vim.fn.shellescape(basename)
-					.. " 2>/dev/null | head -n1"
-			)
-			if found[1] and found[1] ~= "" then
-				return found[1]
-			end
-			-- fallback to cwd
-			return vim.fn.getcwd()
-		else
-			return opts.dir
-		end
-	else
-		-- auto: git root else cwd (same logic as tail script)
-		local handle = io.popen("git rev-parse --show-toplevel 2>/dev/null")
-		local git_root = handle and handle:read("*l")
-		if handle then
-			handle:close()
-		end
-		if git_root and git_root ~= "" then
-			return git_root
-		end
-		return vim.fn.getcwd()
+	-- auto only: git root else cwd (same logic as tail script)
+	local handle = io.popen("git rev-parse --show-toplevel 2>/dev/null")
+	local git_root = handle and handle:read("*l")
+	if handle then
+		handle:close()
 	end
+	if git_root and git_root ~= "" then
+		return git_root
+	end
+	return vim.fn.getcwd()
 end
 
 local function is_loop_active(line)
@@ -87,9 +52,6 @@ function M.start()
 		table.insert(cmd, "--exclude")
 		table.insert(cmd, opts.exclude)
 	end
-	-- we want to see human friendly, so not too noisy
-	vim.notify("opencode-watcher: watching [" .. basename .. "] " .. dir, vim.log.levels.INFO)
-
 	loop_active = false
 	ui.clear()
 
@@ -99,9 +61,23 @@ function M.start()
 				if line == "" then
 					goto continue
 				end
+				-- detect error to pin window (never auto-hide on error)
+				local is_err = line:match("%sERR%s") ~= nil
+					or line:match("stream error") ~= nil
+					or line:match("aborted") ~= nil
+					or line:match("cancelled") ~= nil
+					or line:match("ERR%s+stream") ~= nil
 				-- update loop_active
 				local active = is_loop_active(line)
-				if active == true then
+				if is_err then
+					-- pin window on error: cancel any pending hide and keep visible
+					ui.cancel_hide()
+					if idle_hide_timer then
+						vim.fn.timer_stop(idle_hide_timer)
+						idle_hide_timer = nil
+					end
+					ui.ensure_window()
+				elseif active == true then
 					loop_active = true
 					loop_exit_pending = false
 					ui.cancel_hide()
@@ -127,7 +103,7 @@ function M.start()
 						end
 						ui.ensure_window()
 					else
-						-- not looping: show briefly then auto-hide after 5s
+						-- not looping: show briefly then auto-hide after 5s (unless pinned by error above)
 						ui.ensure_window()
 						if idle_hide_timer then
 							vim.fn.timer_stop(idle_hide_timer)
@@ -157,9 +133,6 @@ function M.start()
 		end,
 		on_exit = function(_, code, _)
 			job_id = nil
-			if code ~= 0 then
-				vim.notify("opencode-watcher: tail exited code " .. code, vim.log.levels.WARN)
-			end
 		end,
 		pty = false,
 	})
@@ -201,6 +174,13 @@ end
 -- auto-refresh helper exposed
 function M.refresh()
 	ui.refresh_visible_buffers()
+end
+
+-- expose dir resolver for prompt/server
+M.resolve_dir = resolve_dir
+M.get_dir = resolve_dir
+function M.is_running()
+	return job_id and job_id > 0
 end
 
 return M

@@ -78,6 +78,8 @@ function M.hide()
 		vim.api.nvim_win_close(win, true)
 		win = nil
 	end
+	-- whenever floating window is hidden, clear all text so next show is fresh
+	M.clear()
 end
 
 function M.hide_delayed()
@@ -171,7 +173,13 @@ end
 function M.clear()
 	lines = {}
 	if buf and vim.api.nvim_buf_is_valid(buf) then
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
+		local ok, mod = pcall(vim.api.nvim_buf_get_option, buf, "modifiable")
+		local was_mod = ok and mod or false
+		pcall(vim.api.nvim_buf_set_option, buf, "modifiable", true)
+		pcall(vim.api.nvim_buf_set_lines, buf, 0, -1, false, {})
+		if not was_mod then
+			pcall(vim.api.nvim_buf_set_option, buf, "modifiable", false)
+		end
 	end
 end
 

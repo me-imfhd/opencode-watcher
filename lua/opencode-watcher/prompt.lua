@@ -200,6 +200,24 @@ function M.open(opts)
 	if #lines == 1 and lines[1] == "" then
 		vim.api.nvim_buf_set_option(b, "modified", false)
 	end
+	-- present in insert mode on a new line so user can type immediately
+	vim.schedule(function()
+		if not is_win_valid() then return end
+		pcall(vim.api.nvim_set_current_win, win)
+		local cur = vim.api.nvim_buf_get_lines(b, 0, -1, false)
+		local is_empty = #cur == 1 and cur[1] == ""
+		if not is_empty then
+			if cur[#cur] ~= "" then
+				vim.api.nvim_buf_set_option(b, "modifiable", true)
+				vim.api.nvim_buf_set_lines(b, #cur, #cur, false, { "" })
+			end
+			local count = vim.api.nvim_buf_line_count(b)
+			pcall(vim.api.nvim_win_set_cursor, win, { count, 0 })
+		else
+			pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+		end
+		vim.cmd("startinsert")
+	end)
 	return b, win
 end
 
@@ -340,6 +358,8 @@ function M.get_visual_selection()
 end
 
 -- capture file context for yank: filename + line range, only for real file buffers
+-- intentionally returns nil for quickfix/trouble (buftype != "") so those yanks stay raw text
+-- file buffers get "File: rel:line" + fenced block header for opencode
 local function capture_context()
 	local src_buf = vim.api.nvim_get_current_buf()
 	if src_buf == buf then
@@ -470,31 +490,85 @@ end
 
 function M.submit()
 	local b = ensure_buf()
+	-- ensure all file buffers are saved so opencode sees latest changes
+	-- skip the prompt buffer itself (acwrite, no file) to avoid recursion
+	for _, nb in ipairs(vim.api.nvim_list_bufs()) do
+		if nb ~= b and vim.api.nvim_buf_is_valid(nb) and vim.api.nvim_get_option_value("modified", { buf = nb }) and vim.api.nvim_get_option_value("buftype", { buf = nb }) == "" then
+			local name = vim.api.nvim_buf_get_name(nb)
+			if name ~= "" then
+				vim.api.nvim_buf_call(nb, function()
+					pcall(vim.cmd, "silent! write")
+				end)
+			end
+		end
+	end
+
 	local lines = vim.api.nvim_buf_get_lines(b, 0, -1, false)
 	local content = table.concat(lines, "\n")
+	local ok_log, logger = pcall(require, "opencode-watcher.logger")
 	if content:match("^%s*$") then
-		vim.notify("opencode prompt: empty, nothing to send", vim.log.levels.WARN)
+		if ok_log then logger.warn("submit empty prompt, not sending") end
 		vim.api.nvim_buf_set_option(b, "modified", false)
+		-- still close/clear so prompt doesn't linger on empty save
+		local cfg_e = get_config()
+		local p_e = cfg_e.prompt or {}
+		if p_e.clear_on_submit then
+			vim.api.nvim_buf_set_lines(b, 0, -1, false, {})
+		end
+		if p_e.close_on_submit then
+			M.close()
+		end
 		return
 	end
-	-- placeholder for future opencode integration: send via job / TUI
-	-- for now just notify
-	vim.notify("prompt sent to opencode", vim.log.levels.INFO)
-	-- fire User autocmd so users can hook real send
-	pcall(vim.api.nvim_exec_autocmds, "User", {
-		pattern = "OpencodePromptSubmit",
-		data = { content = content, buf = b },
-	})
+	-- prepend configurable instructions to keep agent focused/fast
+	local cfg_ins = get_config()
+	local p_ins = cfg_ins.prompt or {}
+	local instructions = p_ins.instructions or p_ins.prefix or p_ins.system_prompt
+	if instructions and instructions ~= "" then
+		content = instructions .. "\n\n" .. content
+	end
+	if ok_log then
+		local preview = content:gsub("\n", "\\n"):sub(1, 300)
+		logger.info(string.format("submit prompt len=%d preview=%s", #content, preview))
+	end
 	local cfg = get_config()
 	local p = cfg.prompt or {}
+	local dir = nil
+	-- resolve project dir via watcher (git root else cwd)
+	local ok_w, watcher = pcall(require, "opencode-watcher.watcher")
+	if ok_w and watcher and watcher.resolve_dir then
+		dir = watcher.resolve_dir()
+	else
+		dir = vim.fn.getcwd()
+	end
+
+	-- fire User autocmd so users can hook real send (legacy)
+	pcall(vim.api.nvim_exec_autocmds, "User", {
+		pattern = "OpencodePromptSubmit",
+		data = { content = content, buf = b, dir = dir },
+	})
+
+	-- close/clear immediately regardless of abort intent or server result
 	if p.clear_on_submit then
 		vim.api.nvim_buf_set_lines(b, 0, -1, false, {})
-		vim.api.nvim_buf_set_option(b, "modified", false)
-	else
-		vim.api.nvim_buf_set_option(b, "modified", false)
 	end
+	vim.api.nvim_buf_set_option(b, "modified", false)
 	if p.close_on_submit then
 		M.close()
+	end
+
+	-- delivery via opencode serve (server mode only) – fire and forget, only errors notify
+	local ok_s, server = pcall(require, "opencode-watcher.server")
+	if ok_s and server then
+		server.send(dir, content, function(ok)
+			if not ok then
+				vim.schedule(function()
+					vim.notify("opencode watcher: failed to send prompt to server", vim.log.levels.ERROR)
+				end)
+			end
+		end)
+	else
+		vim.notify("opencode watcher: failed to send prompt (server unavailable)", vim.log.levels.ERROR)
 	end
 end
 
