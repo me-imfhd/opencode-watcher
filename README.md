@@ -1,23 +1,29 @@
 # opencode-watcher.nvim
 
-<video src="https://github.com/user-attachments/assets/d1c2ef24-703c-4ac4-ad03-692d0d4c7c66" controls autoplay loop muted playsinline width="100%"></video>
-
 Neovim watcher for `opencode` - streams `opencode.log` human-friendly per project, shows agent progress, handles inline edits via `opencode serve`.
+
+## Viewing Opencode Events in Neovim sharing same directory
+<video src="https://github.com/user-attachments/assets/d1c2ef24-703c-4ac4-ad03-692d0d4c7c66" controls autoplay loop muted playsinline width="100%"></video>
+See [Events per Directory](#1-events-per-directory) for [How it works](#how-it-works)
+
+## Send quick inline requests to opencode with visual selection
+Use `<C-.>` to yank the visual selected text to over opencode://prompt buffer
+Save the buffer `:w` to send the request
+<video src="https://github.com/user-attachments/assets/3fdba692-b867-4c86-aacd-8f4e550f94eb" controls autoplay loop muted playsinline width="100%"></video>
+See [Inline Edits](#2-inline-edits) for [How it works](#how-it-works)
 
 > For author's original notes and design rationale, see [`author_notes.txt`](./author_notes.txt).
 
 ## Goals
 
 1.  **Utilize `opencode` events** - touching/editing files, tool execution, looping, permission stuck, failure, progress across tasks, buffer refresh on format.
-2.  **Inline edits** - visual yank via `getregion()`, `File: line` header, vsplit prompt, `:w` send, session reuse per project.
+2.  **Inline edits** - visual yank via `getregion()`, `File: line` header, vsplit prompt, save to send, session reuse per project.
 3.  `:OpencodeWatcherLogs` - prettified live log per project (persistent terminal).
 4.  `:OpencodeRefresh` - clear logs + new session.
 5.  `:OpencodeModel` - change model per session.
 6.  `:OpencodeDebugLogs` - plugin debug log.
 
 ## Install (lazy.nvim)
-
-Minimal sensible setup (keep only informative options):
 
 ```lua
 {
@@ -135,4 +141,4 @@ Debug logs (when `debug=false` only `INFO/WARN/ERROR` via `vim.notify` errors):
 
 ## Disclaimer
 
-Personal project, heavily written by AI.
+This project was assisted by AI
